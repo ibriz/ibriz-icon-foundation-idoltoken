@@ -4,6 +4,7 @@ import abc
 
 from iconservice import *
 import uuid
+import json
 
 TAG = 'IdolToken'
 
@@ -63,30 +64,48 @@ class IdolToken(IconScoreBase, TokenStandard):
 
         self._idolOwner = DictDB("IDOLOWNER", db, value_type=Address)
         self._ownerToIdolCount = DictDB("OWNERIDOLCOUNT", db, value_type=int)
-        self._idol = ArrayDB("IDOL", db, value_type=bytes)
+        self._idolRegister = ArrayDB("IDOLLIST", db, value_type=str)
+        self._idols = DictDB("IDOL", db, value_type=str, depth=2)
 
     def on_install(self, initialSupply: int, decimals: int) -> None:
         super().on_install()
 
     @external
     def create_idol(self, _name: str, _age: str, _gender: str, _ipfs_handle: str):
-        new_idol = Idol(_name, _age, _gender, _ipfs_handle)
+        idol = Idol(_name, _age, _gender, _ipfs_handle)
         # _tokenId = new_idol.hash_idol()
-        _tokenId = str(self.totalSupply() + 1)
-        self._idol.put(_tokenId)
+        # Use idol guuid to add attributes to DictDB
+        # attribs = [a for a in dir(idol) if not a.startswith('__') and not callable(getattr(idol, a))]
+        # attribs.remove('guuid')
+        attribs = ["name", "age", "gender", "ipfs_handle"]
+        # _tokenId = len(self._idolRegister)
+        _tokenId = idol.guuid
+        self._idolRegister.put(idol.guuid)
+        for attrib in attribs:
+            self._idols[_tokenId][attrib] = getattr(idol, attrib)
+        # _tokenId = str(self.totalSupply() + 1)
         self._idolOwner[_tokenId] = self.msg.sender
         self._ownerToIdolCount[self.msg.sender] += 1
 
     @external(readonly=True)
     def get_idol(self, _tokenId: str) -> str:
-        idol_info = {'tokenId': 'token1', 'name': 'Sagar', 'age': "15", 'gender': "M", "ipfs_handle": "test"}
-        return str(idol_info)
+        # if _tokenId > len(self._idolRegister) or _tokenId < 0:
+        #     return ""
+        # return str(self._idols[_tokenId])
+        attribs = ["name", "age", "gender", "ipfs_handle"]
+        idol = {}
+        for attrib in attribs:
+            idol[attrib] = self._idols[_tokenId][attrib]
+
+        return json.dumps(idol)
 
     @external(readonly=True)
     def get_tokens_of_owner(self, _owner: Address) -> str:
-        total_idols = self.totalSupply()
         idol_token_list = []
-        for _id in range(1, total_idols + 1):
+        print('\nGetting tokens for owner: ' + str(_owner))
+        print('Idols registered: '+str(len(self._idolRegister)))
+        for _id in self._idolRegister:
+            print('key|value : ' + str(_id)+':'+str(self._idolOwner[str(_id)]))
             if self._idolOwner[str(_id)] == _owner:
                 idol_token_list.append(str(_id))
 
@@ -105,7 +124,7 @@ class IdolToken(IconScoreBase, TokenStandard):
 
     @external(readonly=True)
     def totalSupply(self) -> int:
-        return len(self._idol)
+        return len(self._idolRegister)
 
     @external(readonly=True)
     def balanceOf(self, _owner: Address) -> int:

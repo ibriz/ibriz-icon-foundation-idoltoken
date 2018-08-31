@@ -77,7 +77,7 @@ class IdolToken(IconScoreBase, TokenStandard):
         # Use idol guuid to add attributes to DictDB
         # attribs = [a for a in dir(idol) if not a.startswith('__') and not callable(getattr(idol, a))]
         # attribs.remove('guuid')
-        attribs = ["name", "age", "gender", "ipfs_handle"]
+        attribs = ["name", "age", "gender", "ipfs_handle", "guuid"]
         # _tokenId = len(self._idolRegister)
         _tokenId = idol.guuid
         self._idolRegister.put(idol.guuid)
@@ -92,10 +92,13 @@ class IdolToken(IconScoreBase, TokenStandard):
         # if _tokenId > len(self._idolRegister) or _tokenId < 0:
         #     return ""
         # return str(self._idols[_tokenId])
-        attribs = ["name", "age", "gender", "ipfs_handle"]
+        attribs = ["owner", "name", "age", "gender", "ipfs_handle"]
         idol = {}
         for attrib in attribs:
-            idol[attrib] = self._idols[_tokenId][attrib]
+            if attrib == "owner":
+                idol[attrib] = str(self._idolOwner[_tokenId])
+            else:
+                idol[attrib] = self._idols[_tokenId][attrib]
 
         return json.dumps(idol)
 
@@ -109,7 +112,7 @@ class IdolToken(IconScoreBase, TokenStandard):
             if self._idolOwner[str(_id)] == _owner:
                 idol_token_list.append(str(_id))
 
-        return str({'idols': idol_token_list})
+        return json.dumps({'idols': idol_token_list})
 
     def on_update(self) -> None:
         super().on_update()

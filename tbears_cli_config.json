@@ -4,7 +4,7 @@
   "keyStore": null,
   "from": "hxaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "to": "cx0000000000000000000000000000000000000000",
-  "stepLimit": "0x300000",
+  "stepLimit": "0x9000000",
   "deploy": {
     "contentType": "tbears",
     "mode": "install",

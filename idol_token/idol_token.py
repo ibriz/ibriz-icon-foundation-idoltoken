@@ -73,25 +73,16 @@ class IdolToken(IconScoreBase, TokenStandard):
     @external
     def create_idol(self, _name: str, _age: str, _gender: str, _ipfs_handle: str):
         idol = Idol(_name, _age, _gender, _ipfs_handle)
-        # _tokenId = new_idol.hash_idol()
-        # Use idol guuid to add attributes to DictDB
-        # attribs = [a for a in dir(idol) if not a.startswith('__') and not callable(getattr(idol, a))]
-        # attribs.remove('guuid')
         attribs = ["name", "age", "gender", "ipfs_handle", "guuid"]
-        # _tokenId = len(self._idolRegister)
         _tokenId = idol.guuid
         self._idolRegister.put(idol.guuid)
         for attrib in attribs:
             self._idols[_tokenId][attrib] = getattr(idol, attrib)
-        # _tokenId = str(self.totalSupply() + 1)
         self._idolOwner[_tokenId] = self.msg.sender
         self._ownerToIdolCount[self.msg.sender] += 1
 
     @external(readonly=True)
     def get_idol(self, _tokenId: str) -> str:
-        # if _tokenId > len(self._idolRegister) or _tokenId < 0:
-        #     return ""
-        # return str(self._idols[_tokenId])
         attribs = ["owner", "name", "age", "gender", "ipfs_handle"]
         idol = {}
         for attrib in attribs:
@@ -105,10 +96,7 @@ class IdolToken(IconScoreBase, TokenStandard):
     @external(readonly=True)
     def get_tokens_of_owner(self, _owner: Address) -> str:
         idol_token_list = []
-        print('\nGetting tokens for owner: ' + str(_owner))
-        print('Idols registered: '+str(len(self._idolRegister)))
         for _id in self._idolRegister:
-            print('key|value : ' + str(_id)+':'+str(self._idolOwner[str(_id)]))
             if self._idolOwner[str(_id)] == _owner:
                 idol_token_list.append(str(_id))
 
@@ -123,7 +111,7 @@ class IdolToken(IconScoreBase, TokenStandard):
 
     @external(readonly=True)
     def symbol(self) -> str:
-        return "IDT"
+        return "IDOL"
 
     @external(readonly=True)
     def totalSupply(self) -> int:
@@ -145,7 +133,7 @@ class IdolToken(IconScoreBase, TokenStandard):
     def approve(self, _to: Address, _tokenId: str):
         tokenOwner = self._idolOwner[_tokenId]
         if tokenOwner != self.msg.sender:
-            raise IconScoreException("approve : sender does not owns tokenId")
+            raise IconScoreException("approve : sender does not own the token")
 
         self._token_approved[_tokenId] = _to
         self.Approval(self.msg.sender, _to, _tokenId)
@@ -154,7 +142,7 @@ class IdolToken(IconScoreBase, TokenStandard):
     def transfer(self, _to: Address, _tokenId: str):
         idolOwner = self._idolOwner[_tokenId]
         if idolOwner != self.msg.sender:
-            raise IconScoreException("transfer : sender does not owns tokenId")
+            raise IconScoreException("transfer : sender does not own the token")
 
         approved = self.getApproved(_tokenId)
         if approved != _to:
@@ -171,7 +159,7 @@ class IdolToken(IconScoreBase, TokenStandard):
     def transferFrom(self, _from: Address, _to: Address, _tokenId: str):
         idolOwner = self._idolOwner[_tokenId]
         if idolOwner != _from:
-            raise IconScoreException("transfer : _from does not owns tokenId")
+            raise IconScoreException("transfer : _from does not own the token")
 
         approved = self.getApproved(_tokenId)
         if approved != _to:

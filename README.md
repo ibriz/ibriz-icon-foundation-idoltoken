@@ -1,7 +1,18 @@
 # iBriz | Idol Token (ICON Foundation)
 
 <img src="https://ibriz.ai/wp-content/themes/ibriz-blog/assets/images/ibriz.svg" width="80" height="80"><img src="https://icondev.io/img/logo.png" width="188" height="35">
-### Installing **IdolToken** to tbears 
+### Installing tbears
+```sh
+$ pip install tbears
+```
+
+You could also install docker version of tbears:
+```sh
+$ docker pull iconloop/tbears
+$ docker run -it --name tbears-container -p 9000:9000 iconloop/tbears
+```
+
+### Installing **IdolToken** to tbears
 ``````sh
 $ tbears deploy -t tbears idol_token -f hx65f6e18d378b57612a28f72acb97021eaa82aa5a -k keystore.json -c tbears_cli_config.json
 ``````

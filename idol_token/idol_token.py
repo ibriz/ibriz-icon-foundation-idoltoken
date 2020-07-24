@@ -17,7 +17,15 @@ class TokenStandard(ABC):
         pass
 
     @abstractmethod
-    def totalSupply(self) -> int:
+    def ownerOf(self, _tokenId: int) -> Address:
+        pass
+
+    @abstractmethod
+    def getApproved(self, _tokenId: int) -> Address:
+        pass
+
+    @abstractmethod
+    def approve(self, _to: Address, _tokenId: int):
         pass
 
     @abstractmethod
@@ -25,32 +33,45 @@ class TokenStandard(ABC):
         pass
 
     @abstractmethod
-    def ownerOf(self, _tokenId: int) -> Address:
+    def transferFrom(self, _from: Address, _to: Address, _tokenId: int):
         pass
-
 
 class IdolToken(IconScoreBase, TokenStandard):
 
-    @eventlog(indexed=3)
-    def Transfer(self, _from: Address, _to: Address, _tokenId: str):
-        pass
+    _OWNER_ADDRESS="owner_address"
+    _TOKEN_APPROVED="token_approved"
+    _IDOL_OWNER="idol_owner"
+    _OWNER_IDOL_COUNT="owner_idol_count"
+    _IDOL_LIST="idol_list"
+    _IDOL="idol"
+    _ZERO_ADDRESS = Address.from_prefix_and_int(AddressPrefix.EOA, 0)
 
-    @eventlog(indexed=3)
-    def Approval(self, _owner: Address, _approved: Address, _tokenId: str):
-        pass
+    
 
     def __init__(self, db: IconScoreDatabase) -> None:
         super().__init__(db)
-        self._owner_address = VarDB("OWNER_ADDRESS", db, value_type=Address)
-        self._token_approved = DictDB("TOKEN_APPROVED", db, value_type=Address)
+        self._owner_address = VarDB(self._OWNER_ADDRESS, db, value_type=Address)
+        self._token_approved = DictDB(self._TOKEN_APPROVED, db, value_type=Address)
+        self._idolOwner = DictDB(self._IDOL_OWNER, db, value_type=Address)
+        self._ownerToIdolCount = DictDB(self._OWNER_IDOL_COUNT, db, value_type=int)
+        self._idolRegister = ArrayDB(self._IDOL_LIST, db, value_type=str)
+        self._idols = DictDB(self._IDOL, db, value_type=str, depth=2)
 
-        self._idolOwner = DictDB("IDOLOWNER", db, value_type=Address)
-        self._ownerToIdolCount = DictDB("OWNERIDOLCOUNT", db, value_type=int)
-        self._idolRegister = ArrayDB("IDOLLIST", db, value_type=str)
-        self._idols = DictDB("IDOL", db, value_type=str, depth=2)
 
+    @eventlog(indexed=3)
+    def Transfer(self, _from: Address, _to: Address, _tokenId: int):
+        pass
+
+    @eventlog(indexed=3)
+    def Approval(self, _owner: Address, _approved: Address, _tokenId: int):
+        pass 
+    
     def on_install(self, initialSupply: int, decimals: int) -> None:
         super().on_install()
+    
+    def on_update(self) -> None:
+        super().on_update()
+
 
     @external
     def create_idol(self, _name: str, _age: str, _gender: str, _ipfs_handle: str):
@@ -58,22 +79,22 @@ class IdolToken(IconScoreBase, TokenStandard):
         attribs = {"name": _name, "age": _age, "gender": _gender, "ipfs_handle": _ipfs_handle}
         _tokenId = str(self.totalSupply() + 1)
         self._idolRegister.put(_tokenId)
-        for attrib in attribs:
-            self._idols[_tokenId][attrib] = attribs[attrib]
+        # for attrib in attribs:
+        #     self._idols[_tokenId][attrib] = attribs[attrib]
         self._idolOwner[_tokenId] = self.msg.sender
         self._ownerToIdolCount[self.msg.sender] += 1
+        self._idols[_tokenId]["attributes"]=json_dumps(attribs)
+
 
     @external(readonly=True)
-    def get_idol(self, _tokenId: str) -> dict:
-        attribs = ["owner", "name", "age", "gender", "ipfs_handle"]
-        idol = {}
-        for attrib in attribs:
-            if attrib == "owner":
-                idol[attrib] = str(self._idolOwner[_tokenId])
-            else:
-                idol[attrib] = self._idols[_tokenId][attrib]
+    def get_idol(self, _tokenId: int) -> dict:
+        if not self._id_validity(_tokenId):
+            IconScoreException("idol details : invalid id")
+        idol_attribs = {}
+        idol_attribs=json_loads(self._idols[str(_tokenId)]["attributes"])
+        idol_attribs["owner"]=self.ownerOf(_tokenId)
+        return idol_attribs
 
-        return idol
 
     @external(readonly=True)
     def get_tokens_of_owner(self, _owner: Address) -> dict:
@@ -83,9 +104,6 @@ class IdolToken(IconScoreBase, TokenStandard):
                 idol_token_list.append(str(_id))
 
         return {'idols': idol_token_list}
-
-    def on_update(self) -> None:
-        super().on_update()
 
     @external(readonly=True)
     def name(self) -> str:
@@ -101,55 +119,73 @@ class IdolToken(IconScoreBase, TokenStandard):
 
     @external(readonly=True)
     def balanceOf(self, _owner: Address) -> int:
+        if _owner is None or  self._is_zero_address(_owner):
+            revert("Invalid owner address")
         return self._ownerToIdolCount[_owner]
 
     @external(readonly=True)
     def ownerOf(self, _tokenId: int) -> Address:
-        return self._idolOwner[_tokenId]
+        if not  (self._id_validity(_tokenId)):
+            revert("Invalid tokenId")
+        return self._idolOwner[str(_tokenId)]
 
     @external(readonly=True)
-    def getApproved(self, _tokenId: str) -> Address:
-        return self._token_approved[_tokenId]
+    def getApproved(self, _tokenId: int) -> Address:
+        if not (self._id_validity(_tokenId)):
+            revert("Invalid tokenId")
+        addr=self._token_approved[str(_tokenId)]
+        if addr is None:
+            return self._ZERO_ADDRESS
+        return addr
 
     @external
-    def approve(self, _to: Address, _tokenId: str):
-        tokenOwner = self._idolOwner[_tokenId]
+    def approve(self, _to: Address, _tokenId: int):
+        tokenOwner = self._idolOwner[str(_tokenId)]
         if tokenOwner != self.msg.sender:
             raise IconScoreException("approve : sender does not own the token")
-
-        self._token_approved[_tokenId] = _to
+        if _to==tokenOwner:
+            raise IconScoreException("approve : cant approve to token owner")
+        self._token_approved[str(_tokenId)] = _to
         self.Approval(self.msg.sender, _to, _tokenId)
 
     @external
-    def transfer(self, _to: Address, _tokenId: str):
-        idolOwner = self._idolOwner[_tokenId]
+    def transfer(self, _to: Address, _tokenId: int):
+        idolOwner = self.ownerOf(_tokenId)
         if idolOwner != self.msg.sender:
             raise IconScoreException("transfer : sender does not own the token")
-
+        if self._is_zero_address(_to):
+            raise IconScoreException("transfer : receiver cant be a zero address")
         approved = self.getApproved(_tokenId)
         if approved != _to:
             raise IconScoreException("transfer : _to is not approved")
-
-        self._idolOwner[_tokenId] = _to
-        self._ownerToIdolCount[self.msg.sender] -= 1
-        self._ownerToIdolCount[_to] += 1
-
-        del self._token_approved[_tokenId]
-        self.Transfer(self.msg.sender, _to, _tokenId)
+        self._transfer(self.msg.sender,_to,_tokenId)
 
     @external
     def transferFrom(self, _from: Address, _to: Address, _tokenId: str):
-        idolOwner = self._idolOwner[_tokenId]
+        idolOwner = self.ownerOf(_tokenId)
         if idolOwner != _from:
             raise IconScoreException("transfer : _from does not own the token")
-
+        if idolOwner!=self.msg.sender and self._token_approved[str(_tokenId)]!=self.msg.sender:
+            raise IconScoreException("transfer : unauthorised user for trasfer")
         approved = self.getApproved(_tokenId)
         if approved != _to:
             raise IconScoreException("transfer : _to is not approved")
+        self._transfer(_from,_to,_tokenId)
 
-        self._idolOwner[_tokenId] = _to
-        self._ownerToIdolCount[_from] -= 1
-        self._ownerToIdolCount[_to] += 1
+    def _transfer(self,_from:Address,_to:Address,_tokenId:int):
+        self._idolOwner[str(_tokenId)]=_to
+        self._ownerToIdolCount[_to]+=1
+        self._ownerToIdolCount[_from]-=1
+        del self._token_approved[str(_tokenId)]
+        self.Transfer(_from,_to,_tokenId)
 
-        del self._token_approved[_tokenId]
-        self.Transfer(_from, _to, _tokenId)
+    def _is_zero_address(self, _address: Address) -> bool:
+    # Check if address is zero address
+        if _address == self._ZERO_ADDRESS:
+            return True
+        return False
+
+    def _id_validity(self,_tokenId)-> bool:
+        if str(_tokenId) not in self._idolRegister:
+            return False
+        return True
